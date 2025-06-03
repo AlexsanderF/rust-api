@@ -7,3 +7,9 @@ pub struct CreateTaskSchema {
     pub priority: String,
     pub status: String,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct FilterOptions {
+    pub page: Option<usize>,
+    pub limit: Option<usize>,
+}

@@ -4,7 +4,7 @@ use crate::{
     schema::{CreateTaskSchema, FilterOptions},
 };
 use actix_web::{
-    HttpResponse, Responder, get, post, web,
+    HttpResponse, Responder, delete, get, post, web,
     web::{Data, Json, Path, Query, scope},
 };
 use serde_json::json;
@@ -96,12 +96,36 @@ async fn get_task_by_id(path: Path<Uuid>, data: Data<AppState>) -> impl Responde
     }
 }
 
+#[delete("/tasks/{id}")]
+async fn delete_task_by_id(path: Path<Uuid>, data: Data<AppState>) -> impl Responder {
+    let task_id = path.into_inner();
+
+    match sqlx::query_as!(
+        TaskModel,
+        "DELETE FROM tasks WHERE id = $1 RETURNING *",
+        task_id
+    )
+    .fetch_one(&data.db)
+    .await
+    {
+        Ok(_) => HttpResponse::Ok().json(json!({
+            "status": "success",
+            "message": "Task deleted successfully"
+        })),
+        Err(err) => HttpResponse::InternalServerError().json(json!({
+            "status": "error",
+            "message": format!("{:?}", err)
+        })),
+    }
+}
+
 pub fn config(conf: &mut web::ServiceConfig) {
     let scope = scope("/api")
         .service(health)
         .service(create_task)
         .service(get_all_tasks)
-        .service(get_task_by_id);
+        .service(get_task_by_id)
+        .service(delete_task_by_id);
 
     conf.service(scope);
 }

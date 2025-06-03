@@ -2,7 +2,7 @@ mod model;
 mod schema;
 mod services;
 
-use actix_web::{App, HttpServer, web};
+use actix_web::{App, HttpServer, middleware::Logger, web};
 use dotenv::dotenv;
 use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
@@ -12,7 +12,14 @@ struct AppState {
 
 #[actix::main]
 async fn main() -> std::io::Result<()> {
+    if std::env::var_os("RUST_LOG").is_none() {
+        unsafe {
+            std::env::set_var("RUST_LOG", "actix_web=info");
+        }
+    }
+
     dotenv().ok();
+    env_logger::init();
 
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
 
@@ -40,6 +47,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .app_data(web::Data::new(AppState { db: pool.clone() }))
             .configure(services::config)
+            .wrap(Logger::default())
     })
     .bind(std::env::var("SERVER").unwrap())?
     .run()

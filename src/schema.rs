@@ -5,5 +5,5 @@ pub struct CreateTaskSchema {
     pub title: String,
     pub content: String,
     pub priority: String,
-    pub status: String
+    pub status: String,
 }

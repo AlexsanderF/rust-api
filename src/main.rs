@@ -4,7 +4,7 @@ mod services;
 
 use actix_web::{App, HttpServer, web};
 use dotenv::dotenv;
-use sqlx::{Pool, Postgres, postgres, postgres::PgPoolOptions};
+use sqlx::{Pool, Postgres, postgres::PgPoolOptions};
 
 struct AppState {
     db: Pool<Postgres>,

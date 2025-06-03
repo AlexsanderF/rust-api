@@ -5,9 +5,10 @@ use crate::{
 };
 use actix_web::{
     HttpResponse, Responder, get, post, web,
-    web::{Data, Json, Query, scope},
+    web::{Data, Json, Path, Query, scope},
 };
 use serde_json::json;
+use uuid::Uuid;
 
 #[get("/health")]
 async fn health() -> impl Responder {
@@ -73,11 +74,34 @@ async fn get_all_tasks(opts: Query<FilterOptions>, data: Data<AppState>) -> impl
     }
 }
 
+#[get("/tasks/{id}")]
+async fn get_task_by_id(path: Path<Uuid>, data: Data<AppState>) -> impl Responder {
+    let task_id = path.into_inner();
+
+    match sqlx::query_as!(TaskModel, "SELECT * FROM tasks WHERE id = $1", task_id)
+        .fetch_one(&data.db)
+        .await
+    {
+        Ok(task) => {
+            let response = json!({
+                "status": "success",
+                "task": task
+            });
+            HttpResponse::Ok().json(response)
+        }
+        Err(err) => HttpResponse::InternalServerError().json(json!({
+            "status": "error",
+            "message": format!("{:?}", err)
+        })),
+    }
+}
+
 pub fn config(conf: &mut web::ServiceConfig) {
     let scope = scope("/api")
         .service(health)
         .service(create_task)
-        .service(get_all_tasks);
+        .service(get_all_tasks)
+        .service(get_task_by_id);
 
     conf.service(scope);
 }

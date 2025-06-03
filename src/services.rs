@@ -1,10 +1,10 @@
 use crate::model::TaskModel;
 use crate::{
     AppState,
-    schema::{CreateTaskSchema, FilterOptions},
+    schema::{CreateTaskSchema, FilterOptions, UpdateTaskSchema},
 };
 use actix_web::{
-    HttpResponse, Responder, delete, get, post, web,
+    HttpResponse, Responder, delete, get, patch, post, web,
     web::{Data, Json, Path, Query, scope},
 };
 use serde_json::json;
@@ -119,13 +119,83 @@ async fn delete_task_by_id(path: Path<Uuid>, data: Data<AppState>) -> impl Respo
     }
 }
 
+#[patch("/tasks/{id}")]
+async fn update_task_by_id(
+    path: Path<Uuid>,
+    body: Json<UpdateTaskSchema>,
+    data: Data<AppState>,
+) -> impl Responder {
+    let task_id = path.into_inner();
+
+    let existing_task =
+        match sqlx::query_as!(TaskModel, "SELECT * FROM tasks WHERE id = $1", task_id)
+            .fetch_optional(&data.db)
+            .await
+        {
+            Ok(Some(task)) => task,
+            Ok(None) => {
+                return HttpResponse::NotFound().json(json!({
+                    "status": "error",
+                    "message": "Task not found"
+                }));
+            }
+            Err(err) => {
+                let error_message = format!("Failed to fetch task: {}", err);
+                return HttpResponse::InternalServerError().json(json!({
+                    "status": "error",
+                    "message": error_message
+                }));
+            }
+        };
+
+    let title = body.title.as_deref().unwrap_or(&existing_task.title);
+    let content = body.content.as_deref().unwrap_or(&existing_task.content);
+    let status = body.status.as_deref().unwrap_or(&existing_task.status);
+    let priority = body.priority.as_deref().unwrap_or(&existing_task.priority);
+
+    let result = sqlx::query_as!(
+        TaskModel,
+        "UPDATE tasks 
+         SET title = $1, content = $2, status = $3, priority = $4, updated_at = NOW() 
+         WHERE id = $5 
+         RETURNING *",
+        title,
+        content,
+        status,
+        priority,
+        task_id
+    )
+    .fetch_one(&data.db)
+    .await;
+
+    match result {
+        Ok(updated_task) => {
+            let response = json!({
+                "status": "success",
+                "message": "Task updated successfully",
+                "task": updated_task
+            });
+            HttpResponse::Ok().json(response)
+        }
+        Err(err) => {
+            let error_message = format!("Failed to update task: {}", err);
+            eprintln!("{}", error_message);
+            HttpResponse::InternalServerError().json(json!({
+                "status": "error",
+                "message": error_message
+            }))
+        }
+    }
+}
+
 pub fn config(conf: &mut web::ServiceConfig) {
     let scope = scope("/api")
         .service(health)
         .service(create_task)
         .service(get_all_tasks)
         .service(get_task_by_id)
-        .service(delete_task_by_id);
+        .service(delete_task_by_id)
+        .service(update_task_by_id);
 
     conf.service(scope);
 }
